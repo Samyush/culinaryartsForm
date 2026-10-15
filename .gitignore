@@ -17,6 +17,7 @@ dist-ssr
 .env.*
 !.env.example
 *firebase-adminsdk*.json
+Form Creator.zip
 
 # Editor directories and files
 .vscode/*
