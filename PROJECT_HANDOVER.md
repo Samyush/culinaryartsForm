@@ -220,7 +220,7 @@ There is no second client in this repository, and no call site for a route that 
 
 ## Configuration
 
-Vite inlines `import.meta.env.VITE_*` at build time. In GitHub Actions those values are step environment variables on `npm run build`, taken from repository secrets. Locally, `.env.local` is present and gitignored by the `*.local` rule. `.env.example` lists the same keys with empty values. This working tree has no `.env`, `.env.development`, or `.env.production` file. There is no launchSettings or .NET launch profile.
+Vite inlines `import.meta.env.VITE_*` at build time. In GitHub Actions those values are step environment variables on `npm run build`. Locally, `.env.local` is ignored by Git and `.env.example` lists the same keys with empty values. These `VITE_` values are Firebase browser configuration and are embedded in the public JavaScript bundle; they are not suitable for private credentials. There is no launchSettings or .NET launch profile.
 
 | `import.meta.env` key | `firebaseConfig` field | Where production sets it |
 | --- | --- | --- |
@@ -231,7 +231,7 @@ Vite inlines `import.meta.env.VITE_*` at build time. In GitHub Actions those val
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | `messagingSenderId` | GitHub secret `VITE_FIREBASE_MESSAGING_SENDER_ID` |
 | `VITE_FIREBASE_APP_ID` | `appId` | GitHub secret `VITE_FIREBASE_APP_ID` |
 
-The app calls `getAuth` and `getFirestore` only. It does not call Storage or Cloud Messaging. The rules deploy uses GitHub secret `FIREBASE_SERVICE_ACCOUNT_CULINARYARTSNP` and writes it to `firebase-key.json` inside the runner as `GOOGLE_APPLICATION_CREDENTIALS`. Do not print that secret.
+The app calls `getAuth` and `getFirestore` only. It does not call Storage or Cloud Messaging. The rules deploy uses GitHub secret `FIREBASE_SERVICE_ACCOUNT_CULINARYARTSNP` and writes it to a temporary file under `$RUNNER_TEMP` as `GOOGLE_APPLICATION_CREDENTIALS`. Do not print that secret.
 
 `.env.local` on this machine has all six `VITE_` keys set. Values are not copied here.
 
@@ -251,7 +251,7 @@ VITE_FIREBASE_APP_ID=
 `git status` on 5 October 2026:
 
 - Modified, not committed: `src/components/FormFieldRenderer.tsx`, `src/pages/FormBuilderPage.tsx`, `src/pages/PublicFormPage.tsx`, `src/types/form.ts`. The diff adds field type `email`, number `minLength` / `maxLength` in the builder, and public validation for numbers and email. Commit `a7f1931` does not contain that behavior. The Hosting release observed the same day has `last-modified` 15 September 2026, the date of `a7f1931`.
-- Untracked: `culinaryartsnp-firebase-adminsdk-fbsvc-e9ba0d600b.json`. This is a service-account key. It is not referenced by the workflow. The workflow uses the GitHub secret named above. Do not commit this file and do not paste its contents.
+- The service-account key file and `.env.local` were tracked in the backup commit. The repository cleanup removes them from all Git history; local `.env.local` remains ignored for development. Revoke the exposed service-account key and replace the GitHub secret before the next deploy.
 - No tracked file is deleted.
 
 To print a committed file:
@@ -517,8 +517,8 @@ export default defineConfig({
 ## Operational limits and handover risks
 
 1. The live Hosting release checked on 5 October 2026 was last modified 15 September 2026. Uncommitted email and number-length validation are not in commit `a7f1931`.
-2. `culinaryartsnp-firebase-adminsdk-fbsvc-e9ba0d600b.json` is an untracked private key on disk. The workflow does not read it. Do not commit it.
-3. The six `VITE_` values are compiled into the public JavaScript bundle. They are client config. The service-account secret is not client config.
+2. The service-account key was exposed in Git history. Revoke it and replace `FIREBASE_SERVICE_ACCOUNT_CULINARYARTSNP` in GitHub Actions before deploying again.
+3. The six `VITE_` values are compiled into the public JavaScript bundle. They are Firebase client config, not private credentials. The service-account secret is not client config.
 4. Hosting does not require a login. `/admin` is enforced in the browser and by Firestore rules. Published forms and `settings/{document}` are world-readable. Anyone can create a submission on a published form if the payload is only `answers` and `submittedAt`.
 5. Rules set `allow update, delete: if false` on submissions. The client has no edit or delete for answers.
 6. `deleteForm` deletes the form document only. Firestore does not remove the `submissions` subcollection with that call.

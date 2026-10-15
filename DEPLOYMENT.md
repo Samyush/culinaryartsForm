@@ -91,10 +91,13 @@ jobs:
         channelId: live
         projectId: culinaryartsnp
     - name: Deploy Firestore Rules
+      env:
+        FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CULINARYARTSNP }}
       run: |
-        echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_CULINARYARTSNP }}' > firebase-key.json
-        export GOOGLE_APPLICATION_CREDENTIALS="firebase-key.json"
-        npx firebase-tools deploy --only firestore:rules --project culinaryartsnp
+        key_file="$RUNNER_TEMP/firebase-key.json"
+        trap 'rm -f "$key_file"' EXIT
+        printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$key_file"
+        GOOGLE_APPLICATION_CREDENTIALS="$key_file" npx firebase-tools deploy --only firestore:rules --project culinaryartsnp
 ```
 
 `firebase.json`, in full:
@@ -188,11 +191,11 @@ The job then:
 
 A local `docker build` does not apply. There is no image to push, and k3s containerd is not part of this release. Do not copy a compose port into this section; there is no compose file.
 
-The untracked file `culinaryartsnp-firebase-adminsdk-fbsvc-e9ba0d600b.json` is not an input to this workflow. Leave it uncommitted.
+No downloaded service-account JSON file is needed in the repository. The workflow reads the service account from the GitHub Actions secret and writes a temporary file under `$RUNNER_TEMP` only for the Firestore rules deploy. The previously committed local environment and service-account files must be removed from repository history. The exposed service-account key must be revoked and replaced in `FIREBASE_SERVICE_ACCOUNT_CULINARYARTSNP` before the next deployment.
 
 ## Deploy and update
 
-1. Put the six `VITE_` values and `FIREBASE_SERVICE_ACCOUNT_CULINARYARTSNP` in GitHub Actions secrets for `Dipeshcdy/culinaryartsForm`. Names only; do not store the values in git.
+1. Confirm the six `VITE_` values and `FIREBASE_SERVICE_ACCOUNT_CULINARYARTSNP` exist in GitHub Actions secrets for `Dipeshcdy/culinaryartsForm`. Replace the service-account secret with a newly created key after revoking the exposed key. The `VITE_` values are Firebase browser configuration and are embedded in the public JavaScript bundle; do not put private credentials in them.
 2. Merge or push to `main`.
 3. Watch the Actions run for `Deploy to Firebase Hosting on merge` until `build_and_deploy` succeeds. The Hosting step and the Firestore rules step are both in that job. A green Hosting step with a failed rules step still leaves the new static files on `live`.
 4. Smoke test:
@@ -226,7 +229,7 @@ There is no cluster env block. Values are GitHub Actions secrets, inlined by Vit
 | `VITE_FIREBASE_STORAGE_BUCKET` | GitHub secret `VITE_FIREBASE_STORAGE_BUCKET` | `firebaseConfig.storageBucket`. The app does not call Storage. |
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | GitHub secret `VITE_FIREBASE_MESSAGING_SENDER_ID` | `firebaseConfig.messagingSenderId`. The app does not call Messaging. |
 | `VITE_FIREBASE_APP_ID` | GitHub secret `VITE_FIREBASE_APP_ID` | `firebaseConfig.appId` |
-| `FIREBASE_SERVICE_ACCOUNT_CULINARYARTSNP` | GitHub secret of that name | Hosting deploy credentials, and `GOOGLE_APPLICATION_CREDENTIALS` for the rules deploy |
+| `FIREBASE_SERVICE_ACCOUNT_CULINARYARTSNP` | GitHub secret of that name | Hosting deploy credentials, and a temporary `$RUNNER_TEMP/firebase-key.json` for the rules deploy |
 | `GITHUB_TOKEN` | Provided by Actions as `secrets.GITHUB_TOKEN` | `repoToken` on `action-hosting-deploy` |
 
 `firebase.json` does not set `ASPNETCORE_URLS`, `ASPNETCORE_HTTP_PORTS`, or any process environment. Nothing in this app listens on port 8080. If a `VITE_` secret is empty at build time, `initializeApp` receives that empty string. The workflow does not supply a fallback.
@@ -248,7 +251,7 @@ The release checked on 5 October 2026 has `last-modified: Tue, 15 Sep 2026 10:29
 | Actions never starts | The trigger is `push` to `main` only. Confirm the branch and the workflow file name `Deploy to Firebase Hosting on merge`. |
 | `npm run build` fails in CI | The build step is the only step that receives the six `VITE_` secrets. `tsc -b` runs first. The workflow does not select a Node version. |
 | Site is blank or Firebase says the config is invalid | The bundle was built without the `VITE_` secrets, or with empty ones. They are compile-time. Rebuild on `main` after the secrets exist. |
-| Hosting updated, rules did not | The rules step is after `action-hosting-deploy`. Inspect that step’s log. It runs `npx firebase-tools deploy --only firestore:rules --project culinaryartsnp` with `GOOGLE_APPLICATION_CREDENTIALS` pointing at `firebase-key.json` created from `FIREBASE_SERVICE_ACCOUNT_CULINARYARTSNP`. |
+| Hosting updated, rules did not | The rules step is after `action-hosting-deploy`. Inspect that step’s log. It runs `npx firebase-tools deploy --only firestore:rules --project culinaryartsnp` with `GOOGLE_APPLICATION_CREDENTIALS` pointing at a temporary key file created from `FIREBASE_SERVICE_ACCOUNT_CULINARYARTSNP`. |
 | `/login` or a form URL returns the home shell and then “Form not found” | Hosting is correct: every path is `index.html`. The form id is missing, unpublished, or `admin` / `login`. |
 | Public submit fails | Rules allow create only when the form is `published` and the document has only `answers` and `submittedAt`. |
 | Admin can sign in at Firebase and is immediately returned to `/login` | `admins/{uid}` is missing. The uid must be the document id. |

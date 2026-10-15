@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# Local environment configuration and downloaded Firebase Admin credentials
+.env
+.env.*
+!.env.example
+*firebase-adminsdk*.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

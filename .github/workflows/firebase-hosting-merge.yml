@@ -24,7 +24,10 @@ jobs:
           channelId: live
           projectId: culinaryartsnp
       - name: Deploy Firestore Rules
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CULINARYARTSNP }}
         run: |
-          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_CULINARYARTSNP }}' > firebase-key.json
-          export GOOGLE_APPLICATION_CREDENTIALS="firebase-key.json"
-          npx firebase-tools deploy --only firestore:rules --project culinaryartsnp
+          key_file="$RUNNER_TEMP/firebase-key.json"
+          trap 'rm -f "$key_file"' EXIT
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$key_file"
+          GOOGLE_APPLICATION_CREDENTIALS="$key_file" npx firebase-tools deploy --only firestore:rules --project culinaryartsnp
